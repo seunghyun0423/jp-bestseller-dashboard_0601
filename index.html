@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JP Bestseller Trend Dashboard</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="pin">📌</div>
+      <div>
+        <h2>메뉴</h2>
+        <p>JP Bestseller</p>
+      </div>
+    </div>
+
+    <nav>
+      <button class="nav-btn active" data-page="youtube">YouTube 크롤링</button>
+      <button class="nav-btn" data-page="gemini">Gemini 딕셔너리 랭킹</button>
+      <button class="nav-btn" data-page="naver">네이버 쇼핑 최저가 비교</button>
+    </nav>
+
+    <div class="key-box">
+      <label>YouTube Data API Key</label>
+      <input type="password" id="youtubeKey" placeholder="AIza..." />
+      <label>Gemini API Key</label>
+      <input type="password" id="geminiKey" placeholder="AIza..." />
+      <label>Naver Client ID</label>
+      <input type="password" id="naverClientId" placeholder="Client ID" />
+      <label>Naver Client Secret</label>
+      <input type="password" id="naverClientSecret" placeholder="Client Secret" />
+      <button id="saveKeysBtn" class="ghost">키 저장</button>
+      <small>키는 브라우저 localStorage에만 저장됩니다. 배포용 공개 사이트에는 키를 넣지 마세요.</small>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section id="page-youtube" class="page active">
+      <div class="hero">
+        <h1>📊 YouTube 키워드 분석 대시보드</h1>
+        <p>검색어를 추가/삭제하고 옵션을 설정해 유튜브 영상 제목·설명·태그·댓글 기반 키워드 후보를 수집합니다.</p>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>1. 검색 키워드 관리</h2>
+          <div class="inline">
+            <input id="newQueryInput" placeholder="예: 일본 돈키호테 필수템" />
+            <button id="addQueryBtn">검색어 추가</button>
+          </div>
+          <label>삭제할 검색어 선택</label>
+          <select id="deleteQuerySelect" multiple></select>
+          <button id="deleteQueryBtn" class="ghost">선택한 검색어 삭제</button>
+          <h3>현재 검색어</h3>
+          <div id="queryList" class="table-wrap small"></div>
+        </div>
+
+        <div class="card">
+          <h2>2. 크롤링 옵션</h2>
+          <div class="form-grid">
+            <label>정렬 기준
+              <select id="ytOrder">
+                <option value="relevance">관련도순</option>
+                <option value="date">최신순</option>
+                <option value="viewCount">조회수순</option>
+                <option value="rating">평점순</option>
+              </select>
+            </label>
+            <label>검색어별 영상 수 <span id="videoCountLabel">30</span>
+              <input type="range" id="videoCount" min="10" max="50" step="5" value="30" />
+            </label>
+            <label>지역 코드
+              <select id="regionCode">
+                <option value="KR">KR</option>
+                <option value="JP">JP</option>
+                <option value="US">US</option>
+              </select>
+            </label>
+            <label>검색 언어
+              <select id="relevanceLanguage">
+                <option value="ko">ko</option>
+                <option value="ja">ja</option>
+                <option value="en">en</option>
+              </select>
+            </label>
+            <label>댓글 수집
+              <input type="checkbox" id="collectComments" checked />
+            </label>
+            <label>영상별 댓글 수 <span id="commentCountLabel">20</span>
+              <input type="range" id="commentCount" min="0" max="100" step="10" value="20" />
+            </label>
+            <label>키워드 후보 최소 글자 수
+              <input type="number" id="minWordLen" min="2" max="10" value="2" />
+            </label>
+            <label>후보 키워드 상위 N개
+              <input type="number" id="topKeywordN" min="50" max="2000" value="500" />
+            </label>
+          </div>
+          <div class="notice">
+            자막은 YouTube Data API만으로 일반 공개 자막을 바로 가져오기 어렵습니다. 이 정적 웹앱은 제목·설명·태그·댓글 중심으로 수집합니다.
+          </div>
+          <button id="runYoutubeBtn" class="primary">🚀 크롤링 업데이트</button>
+        </div>
+      </div>
+
+      <div class="stats" id="ytStats"></div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>영상 수집 결과</h2>
+          <div class="actions">
+            <button id="downloadVideosBtn" class="ghost">videos CSV 다운로드</button>
+            <input type="file" id="uploadVideosCsv" accept=".csv" />
+          </div>
+          <div id="videosTable" class="table-wrap"></div>
+        </div>
+        <div class="card">
+          <h2>키워드 후보</h2>
+          <div class="actions">
+            <button id="downloadCandidateBtn" class="ghost">candidate_df CSV 다운로드</button>
+          </div>
+          <canvas id="keywordChart"></canvas>
+          <div id="candidateTable" class="table-wrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-gemini" class="page">
+      <div class="hero">
+        <h1>🤖 Gemini 딕셔너리 랭킹</h1>
+        <p>유튜브 크롤링 결과에서 추출한 후보 키워드를 Gemini로 분류해 자동 상품 딕셔너리를 만들고 랭킹을 계산합니다.</p>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>1. Gemini 분류 옵션</h2>
+          <div class="form-grid">
+            <label>분류 대상 최소 빈도
+              <input type="number" id="geminiMinCount" value="5" min="1" />
+            </label>
+            <label>분류할 후보 키워드 수
+              <input type="number" id="geminiMaxKeywords" value="300" min="10" max="1000" />
+            </label>
+            <label>제외 카테고리
+              <input id="excludeCategories" value="식품,간식,음료,주류,여행지,일반명사,숫자,URL" />
+            </label>
+          </div>
+          <button id="runGeminiBtn" class="primary">✨ Gemini 딕셔너리 생성</button>
+          <button id="buildRankBtn" class="ghost">📈 상품 랭킹 계산</button>
+          <div class="notice">수작업 딕셔너리는 사용하지 않고, 현재 candidate_df 기반 Gemini 분류 결과만 사용합니다.</div>
+        </div>
+
+        <div class="card">
+          <h2>2. 데이터 업로드</h2>
+          <p>이미 Colab에서 만든 CSV가 있다면 업로드해서 바로 이어갈 수 있습니다.</p>
+          <label>candidate_df CSV 업로드</label>
+          <input type="file" id="uploadCandidateCsv" accept=".csv" />
+          <label>Gemini 딕셔너리 CSV 업로드</label>
+          <input type="file" id="uploadGeminiCsv" accept=".csv" />
+          <div class="actions">
+            <button id="downloadGeminiDictBtn" class="ghost">Gemini dictionary CSV 다운로드</button>
+            <button id="downloadProductRankBtn" class="ghost">product_rank CSV 다운로드</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" id="geminiStats"></div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>Gemini 자동 딕셔너리</h2>
+          <div id="geminiTable" class="table-wrap"></div>
+        </div>
+        <div class="card">
+          <h2>인기 상품 랭킹</h2>
+          <canvas id="rankChart"></canvas>
+          <div id="rankTable" class="table-wrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-naver" class="page">
+      <div class="hero">
+        <h1>🛒 네이버 쇼핑 최저가 비교</h1>
+        <p>Gemini 랭킹 결과를 검색어로 변환해 네이버 쇼핑 상품 수, 최저가, 평균가, 판매몰 수를 비교합니다.</p>
+      </div>
+
+      <div class="card warning">
+        <b>중요:</b> Netlify Drop 같은 정적 사이트에서는 네이버 쇼핑 API가 CORS 정책 때문에 브라우저 직접 호출이 막힐 수 있습니다.
+        이 페이지는 UI와 로직을 포함하지만, 호출이 실패하면 Colab에서 같은 CSV를 사용해 실행하거나 Netlify Functions 기반 프록시가 필요합니다.
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>1. 네이버 쇼핑 옵션</h2>
+          <div class="form-grid">
+            <label>랭킹 상위 N개 검색
+              <input type="number" id="naverTopN" value="100" min="1" max="500" />
+            </label>
+            <label>검색어별 상품 수
+              <input type="number" id="naverDisplay" value="50" min="10" max="100" />
+            </label>
+            <label>정렬 기준
+              <select id="naverSort">
+                <option value="sim">정확도순</option>
+                <option value="asc">최저가순</option>
+                <option value="dsc">최고가순</option>
+                <option value="date">날짜순</option>
+              </select>
+            </label>
+            <label>호출 간격(ms)
+              <input type="number" id="naverDelay" value="300" min="0" step="100" />
+            </label>
+          </div>
+          <button id="runNaverBtn" class="primary">🔎 네이버 쇼핑 조회</button>
+          <div class="actions">
+            <button id="downloadNaverRawBtn" class="ghost">raw CSV</button>
+            <button id="downloadNaverTop10Btn" class="ghost">lowest top10 CSV</button>
+            <button id="downloadNaverSummaryBtn" class="ghost">summary CSV</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>2. 랭킹 데이터 업로드</h2>
+          <label>product_rank CSV 업로드</label>
+          <input type="file" id="uploadRankCsv" accept=".csv" />
+          <div class="notice">
+            검색어 생성 우선순위: 브랜드+품목명 → 일본+품목명 → 캐릭터 브랜드+굿즈 → 브랜드+상품군 → 브랜드.
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" id="naverStats"></div>
+
+      <div class="grid two">
+        <div class="card">
+          <h2>네이버 쇼핑 원본</h2>
+          <div id="naverRawTable" class="table-wrap"></div>
+        </div>
+        <div class="card">
+          <h2>검색어별 요약</h2>
+          <canvas id="naverChart"></canvas>
+          <div id="naverSummaryTable" class="table-wrap"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
